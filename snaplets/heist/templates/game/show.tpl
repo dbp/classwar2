@@ -11,9 +11,23 @@
         <button type="submit">Add</button>
       </form>
     </li>
+    <li><a href="/game/${id}/roll"><button>Roll</button></a> (The first player is up next).</li>
     <players>
-      <li><name/> (<class/>)</li>
+      <li><name/> (<class/>) has <assets/> assets.</li>
     </players>
   </ul>
+
+  <h4>Board</h4>
+  <board>
+    <div class="place">
+      <render/>
+      <hr/>
+      <players>
+        <is-place id="${position}">
+          <name/>
+        </is-place>
+      </players>
+    </div>
+  </board>
 
 </apply>

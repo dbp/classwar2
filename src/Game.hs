@@ -18,9 +18,9 @@ import qualified Data.Map as M
 import Data.SafeCopy
 import Data.Typeable
 
-data Class = Capitalist | Worker | Student | Manager | SmallBusinessOwner | UnderClass deriving (Typeable, Show)
+data Class = Capitalist | Worker | Student | Manager | SmallBusinessOwner | UnderClass deriving (Typeable, Show, Eq)
 
-data ClassCategory = MajorClasses | MinorClasses deriving Typeable
+data ClassCategory = MajorClasses | MinorClasses deriving (Typeable, Show)
 
 data Player = Player { pName :: Text
                      , pAssets :: Int
@@ -57,15 +57,22 @@ defaultConfrontationCards = [ConfrontationAssets 2, ConfrontationTurns 1, Confro
 
 data Place = WorkerPlace Int
             | CapitalistPlace Int
-            | BothPlace Int Int
+            | BothPlace {workerAmnt :: Int, capAmnt :: Int}
             | ChancePlace
             | ConfrontPlace
-            | AlliancePlace ClassCategory deriving Typeable
+            | AlliancePlace ClassCategory deriving (Typeable)
 
+instance Show Place where
+  show (WorkerPlace n) = "Worker Gains " ++ (show n)
+  show (CapitalistPlace n) = "Capitalist Gains " ++ (show n)
+  show (BothPlace nw nc) = "Worker Gains " ++ (show nw) ++ ", Capitalist Gains " ++ (show nc)
+  show ChancePlace = "Chance"
+  show ConfrontPlace = "Confrontation"
+  show (AlliancePlace cat) = "Alliance with " ++ (show cat)
 
 data Die = One | Two | Three | Four | Five | Six deriving Typeable
 
-data Board = Board [Place] deriving Typeable
+data Board = Board { unBoard :: [Place] } deriving Typeable
 
 data Stage = Stage1 | Stage2 | Stage3 deriving (Typeable, Show)
 

@@ -23,7 +23,7 @@ import           Heist.Interpreted
 import qualified Data.Map as M
 import           Snap.Snaplet.AcidState
 import           Control.Monad.Trans (liftIO)
-import           System.Random (randomIO)
+import           System.Random (randomIO, randomRIO)
 ------------------------------------------------------------------------------
 import           Application
 import           Game
@@ -68,7 +68,9 @@ gameHandler =
               Just game ->
                 route $ over (mapped._2) ($ game)
                              [("", ifTop . showGameHandler)
-                             ,("add_player", addPlayerHandler)]
+                             ,("add_player", addPlayerHandler)
+                             ,("roll", rollHandler)
+                             ]
 
 showGameHandler :: Game -> AppHandler ()
 showGameHandler game = renderWithSplices "game/show" (gameSplices game)
@@ -81,6 +83,32 @@ addPlayerHandler game =
        Just name -> do let np = Player (T.decodeUtf8 name) 0 Worker 0 []
                        update (UpdateGame (game { gamePlayers =  np : (gamePlayers game)}))
                        redirect (gamePath game)
+
+rollHandler :: Game -> AppHandler ()
+rollHandler game = do roll <- liftIO $ randomRIO (1,6)
+                      let allP = gamePlayers game
+                      let curP = head allP
+                      let board = unBoard (gameBoard game)
+                      let newPos = (roll + pPosition curP) `mod` length board
+                      let place = board !! newPos
+                      let newP = modPlayer curP place
+                      let players = tail allP ++ [newP { pPosition = newPos}]
+                      update (UpdateGame (game { gamePlayers = players }))
+                      redirect (gamePath game)
+  where modPlayer play place = case place of
+                                 WorkerPlace n -> if pClass play == Worker
+                                                     then play { pAssets = pAssets play + n}
+                                                     else play
+                                 CapitalistPlace n -> if pClass play == Capitalist
+                                                         then play { pAssets = pAssets play + n}
+                                                         else play
+                                 BothPlace nw nc
+                                   | pClass play == Worker -> play { pAssets = pAssets play + nw}
+                                   | pClass play == Capitalist -> play { pAssets = pAssets play + nc}
+                                   | otherwise -> play
+                                 ChancePlace -> play
+                                 ConfrontPlace -> play
+                                 AlliancePlace cls -> play
 
 app :: SnapletInit App App
 app = makeSnaplet "app" "An snaplet example application." Nothing $ do
