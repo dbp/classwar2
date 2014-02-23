@@ -2,6 +2,10 @@
 
   <h3>Game in <stage/></h3>
 
+  <has-message>
+    <h4><render-message/></h4>
+  </has-message>
+
   <h4>Players</h4>
   <ul>
     <li>

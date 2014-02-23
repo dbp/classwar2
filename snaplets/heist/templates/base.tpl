@@ -1,6 +1,6 @@
 <html>
   <head>
-    <title>Snap web server</title>
+    <title>Class War. The Game.</title>
     <link rel="stylesheet" type="text/css" href="/screen.css"/>
     <script type="text/javascript" src="/fay/Client.js"></script>
   </head>
