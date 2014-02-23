@@ -51,7 +51,7 @@ gamePath :: Game -> ByteString
 gamePath = gamePathId . gameId
 
 getGameId :: AppHandler Int
-getGameId = do n <- liftIO randomIO
+getGameId = do n <- fmap abs $ liftIO randomIO
                mg <- query (GetGame n)
                case mg of
                  Nothing -> return n
@@ -97,35 +97,60 @@ rollHandler game = do roll <- liftIO $ randomRIO (1,6)
                       let board = unBoard (gameBoard game)
                       let newPos = (roll + pPosition curP) `mod` length board
                       let place = board !! newPos
-                      let (newP, placeMsg) = modPlayer curP place
-                      let players = tail allP ++ [newP { pPosition = newPos}]
-                      update (UpdateGame (game { gamePlayers = players }))
+                      let (newP, newG, placeMsg) = modPlayer (curP { pPosition = newPos}) game place
+                      let players = tail allP ++ [newP]
+                      update (UpdateGame (newG { gamePlayers = players }))
                       setMessage (T.concat [pName curP
                                            ," rolled a "
                                            , T.pack (show roll)
                                            , ". "
                                            , T.pack placeMsg])
                       redirect (gamePath game)
-  where modPlayer play place = case place of
-                                 WorkerPlace n -> if pClass play == Worker
-                                                     then (play { pAssets = pAssets play + n},
-                                                           "Got " ++ (show n) ++ " assets.")
-                                                     else (play, "")
-                                 CapitalistPlace n -> if pClass play == Capitalist
-                                                         then (play { pAssets = pAssets play + n},
-                                                               "Got " ++ (show n) ++ " assets.")
-                                                         else (play, "")
-                                 BothPlace nw nc
-                                   | pClass play == Worker ->
-                                     (play { pAssets = pAssets play + nw},
-                                      "Got " ++ (show nw) ++ " assets.")
-                                   | pClass play == Capitalist ->
-                                     (play { pAssets = pAssets play + nc},
-                                      "Got " ++ (show nc) ++ " assets.")
-                                   | otherwise -> (play, "")
-                                 ChancePlace -> (play, "")
-                                 ConfrontPlace -> (play, "")
-                                 AlliancePlace cls -> (play, "")
+  where modPlayer play game place =
+          case place of
+            WorkerPlace n -> if pClass play == Worker
+                                then let newP = play { pAssets = pAssets play + n}
+                                         newG = game { gamePlayers = newP : tail (gamePlayers game)}
+                                     in
+                                     (newP, newG, "Got " ++ (show n) ++ " assets.")
+                                else (play, game, "")
+            CapitalistPlace n -> if pClass play == Capitalist
+                                    then let newP = play { pAssets = pAssets play + n}
+                                             newG = game { gamePlayers = newP : tail (gamePlayers game)}
+                                         in
+                                         (newP, newG, "Got " ++ (show n) ++ " assets.")
+                                    else (play, game, "")
+            BothPlace nw nc
+              | pClass play == Worker ->
+                let newP = play { pAssets = pAssets play + nw}
+                    newG = game { gamePlayers = newP : tail (gamePlayers game)}
+                in
+                (newP, newG, "Got " ++ (show nw) ++ " assets.")
+              | pClass play == Capitalist ->
+                let newP = play { pAssets = pAssets play + nc}
+                    newG = game { gamePlayers = newP : tail (gamePlayers game)}
+                in
+                (newP, newG,
+                 "Got " ++ (show nc) ++ " assets.")
+              | otherwise -> (play, game, "")
+            ChancePlace -> let curC = head (gameChanceCards game)
+                               restC = tail (gameChanceCards game)
+                               newP' = if ccAssets curC /= 0
+                                       then play { pAssets = pAssets play + ccAssets curC}
+                                       else play
+                               (newP, pa) = if ccSpaces curC /= 0
+                                             then (newP' { pPosition = (pPosition play + ccSpaces curC) `mod` (length (unBoard (gameBoard game)))}
+                                                  , True)
+                                             else (newP', False)
+                               allP = gamePlayers game
+                               newG = game { gameChanceCards = restC ++ [curC], gamePlayers = newP : tail allP}
+                               msg = "Chance Card: " ++ (ccText curC)
+                           in if pa
+                              then let (newPr, newGr, msgR) = modPlayer newP newG (unBoard (gameBoard newG) !! pPosition newP)
+                                   in (newPr, newGr, msg ++ ". " ++ msgR)
+                              else (newP, newG, msg)
+            ConfrontPlace -> (play, game, "")
+            AlliancePlace cls -> (play, game, "")
 
 setMessage :: Text -> AppHandler ()
 setMessage t = with sess $ do setInSession "message" t
@@ -137,6 +162,8 @@ hasMessageSplice = do m <- lift $ with sess (getFromSession "message")
 
 renderMessageSplice :: Splice AppHandler
 renderMessageSplice = do m <- lift $ with sess (getFromSession "message")
+                         lift $ with sess $ do deleteFromSession "message"
+                                               commitSession
                          case m of
                            Nothing -> return []
                            Just m' -> return [X.TextNode m']

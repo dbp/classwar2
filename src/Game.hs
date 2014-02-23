@@ -42,12 +42,12 @@ blankChanceCard :: ChanceCard
 blankChanceCard = ChanceCard "" 0 0 0 0 0 Nothing
 
 defaultChanceCards :: [ChanceCard]
-defaultChanceCards = [ blankChanceCard { ccAssets = 4 }
-                     , blankChanceCard { ccExtraTurns = 1 }
-                     , blankChanceCard { ccSpaces = 3}
-                     , blankChanceCard { ccSkippedTurns = 1 }
-                     , blankChanceCard { ccSpaces = -2}
-                     , blankChanceCard { ccAssets = -2}
+defaultChanceCards = [ blankChanceCard { ccText = "Gain 4 assets.", ccAssets = 4 }
+                     , blankChanceCard { ccText = "Move forward 3 spaces", ccSpaces = 3}
+                     , blankChanceCard { ccText = "Move back 2 spaces", ccSpaces = -2}
+                     , blankChanceCard { ccText = "Lose 2 assets", ccAssets = -2}
+                     , blankChanceCard { ccText = "Move back 1 space", ccSpaces = -1}
+                     , blankChanceCard { ccText = "Gain 12 assets", ccAssets = 12}
                      ]
 
 data ConfrontationCard = ConfrontationTurns Int | ConfrontationAssets Int deriving Typeable
