@@ -1,19 +1,8 @@
 <apply template="base">
 
-  <ifLoggedIn>
-    <p>
-      This is a simple demo page served using
-      <a href="http://snapframework.com/docs/tutorials/heist">Heist</a>
-      and the <a href="http://snapframework.com/">Snap</a> web framework.
-    </p>
-
-    <p>Congrats!  You're logged in as '<loggedInUser/>'</p>
-
-    <p><a href="/logout">Logout</a></p>
-  </ifLoggedIn>
-
-  <ifLoggedOut>
-    <apply template="_login"/>
-  </ifLoggedOut>
+<h2>Class War.</h2>
+<h3>The game.</h3>
+<br/><br/>
+<a href="/new"><button>Start a new game</button></a>
 
 </apply>

@@ -33,7 +33,13 @@ Executable classwar
     snap-loader-static        >= 0.9     && < 0.10,
     text                      >= 0.11    && < 1.2,
     time                      >= 1.1     && < 1.5,
-    xmlhtml                   >= 0.1
+    xmlhtml                   >= 0.1,
+    containers,
+    random,
+    snaplet-fay,
+    safecopy,
+    acid-state,
+    snaplet-acid-state
 
   if flag(old-base)
     build-depends:

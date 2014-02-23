@@ -1,88 +1,93 @@
 {-# LANGUAGE OverloadedStrings #-}
 
-------------------------------------------------------------------------------
--- | This module is where all the routes and handlers are defined for your
--- site. The 'app' function is the initializer that combines everything
--- together and is exported by this module.
 module Site
   ( app
   ) where
 
-------------------------------------------------------------------------------
+import           Control.Lens
 import           Control.Applicative
 import           Data.ByteString (ByteString)
+import qualified Data.ByteString as B
+import qualified Data.ByteString.Char8 as B8
+import           Data.Text (Text)
 import qualified Data.Text as T
+import qualified Data.Text.Encoding as T
 import           Snap.Core
 import           Snap.Snaplet
-import           Snap.Snaplet.Auth
-import           Snap.Snaplet.Auth.Backends.JsonFile
 import           Snap.Snaplet.Heist
 import           Snap.Snaplet.Session.Backends.CookieSession
+import           Snap.Snaplet.Fay
 import           Snap.Util.FileServe
 import           Heist
-import qualified Heist.Interpreted as I
+import           Heist.Interpreted
+import qualified Data.Map as M
+import           Snap.Snaplet.AcidState
+import           Control.Monad.Trans (liftIO)
+import           System.Random (randomIO)
 ------------------------------------------------------------------------------
 import           Application
+import           Game
+import           Splices
 
-
-------------------------------------------------------------------------------
--- | Render login form
-handleLogin :: Maybe T.Text -> Handler App (AuthManager App) ()
-handleLogin authError = heistLocal (I.bindSplices errs) $ render "login"
-  where
-    errs = maybe noSplices splice authError
-    splice err = "loginError" ## I.textSplice err
-
-
-------------------------------------------------------------------------------
--- | Handle login submit
-handleLoginSubmit :: Handler App (AuthManager App) ()
-handleLoginSubmit =
-    loginUser "login" "password" Nothing
-              (\_ -> handleLogin err) (redirect "/")
-  where
-    err = Just "Unknown user or password"
-
-
-------------------------------------------------------------------------------
--- | Logs out and redirects the user to the site index.
-handleLogout :: Handler App (AuthManager App) ()
-handleLogout = logout >> redirect "/"
-
-
-------------------------------------------------------------------------------
--- | Handle new user form submit
-handleNewUser :: Handler App (AuthManager App) ()
-handleNewUser = method GET handleForm <|> method POST handleFormSubmit
-  where
-    handleForm = render "new_user"
-    handleFormSubmit = registerUser "login" "password" >> redirect "/"
-
-
-------------------------------------------------------------------------------
--- | The application's routes.
-routes :: [(ByteString, Handler App App ())]
-routes = [ ("/login",    with auth handleLoginSubmit)
-         , ("/logout",   with auth handleLogout)
-         , ("/new_user", with auth handleNewUser)
+routes :: [(ByteString, AppHandler ())]
+routes = [ ("/fay",      with fay fayServe)
+         , ("/new",      newGameHandler)
+         , ("/game/:id", gameHandler)
          , ("",          serveDirectory "static")
          ]
 
+showError :: Text -> AppHandler ()
+showError e = renderWithSplices "error" ("err" ## textSplice e)
 
-------------------------------------------------------------------------------
--- | The application initializer.
+gamePathId :: Int -> ByteString
+gamePathId n = B.append "/game/" (B8.pack (show n))
+gamePath :: Game -> ByteString
+gamePath = gamePathId . gameId
+
+getGameId :: AppHandler Int
+getGameId = do n <- liftIO randomIO
+               mg <- query (GetGame n)
+               case mg of
+                 Nothing -> return n
+                 Just _ -> getGameId
+
+newGameHandler :: AppHandler ()
+newGameHandler = do n <- getGameId
+                    update (NewGame n)
+                    redirect (gamePathId n)
+
+gameHandler :: AppHandler ()
+gameHandler =
+  do mid <- getParam "id"
+     case fmap (read.B8.unpack) mid of
+       Nothing -> pass
+       Just i ->
+         do mg <- query (GetGame i)
+            case mg of
+              Nothing -> pass
+              Just game ->
+                route $ over (mapped._2) ($ game)
+                             [("", ifTop . showGameHandler)
+                             ,("add_player", addPlayerHandler)]
+
+showGameHandler :: Game -> AppHandler ()
+showGameHandler game = renderWithSplices "game/show" (gameSplices game)
+
+addPlayerHandler :: Game -> AppHandler ()
+addPlayerHandler game =
+  do n <- getParam "name"
+     case n of
+       Nothing -> showError "No name specified."
+       Just name -> do let np = Player (T.decodeUtf8 name) 0 Worker 0 []
+                       update (UpdateGame (game { gamePlayers =  np : (gamePlayers game)}))
+                       redirect (gamePath game)
+
 app :: SnapletInit App App
 app = makeSnaplet "app" "An snaplet example application." Nothing $ do
     h <- nestSnaplet "" heist $ heistInit "templates"
     s <- nestSnaplet "sess" sess $
            initCookieSessionManager "site_key.txt" "sess" (Just 3600)
-
-    -- NOTE: We're using initJsonFileAuthManager here because it's easy and
-    -- doesn't require any kind of database server to run.  In practice,
-    -- you'll probably want to change this to a more robust auth backend.
-    a <- nestSnaplet "auth" auth $
-           initJsonFileAuthManager defAuthSettings sess "users.json"
     addRoutes routes
-    addAuthSplices h auth
-    return $ App h s a
-
+    a <- nestSnaplet "acid" acid $ acidInit (GameState M.empty)
+    f <- nestSnaplet "fay" fay initFay
+    return $ App h s f a
